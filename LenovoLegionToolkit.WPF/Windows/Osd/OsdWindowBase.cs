@@ -36,7 +36,14 @@ public abstract class OsdWindowBase : Window
     protected const double MAX_FRAME_TIME_MS = 10.0;
     protected const long FRAMETIME_TIMEOUT_TICKS = 2 * 10_000_000;
 
-    protected Brush _categoryBrush = Brushes.White;
+    protected readonly Dictionary<OsdCategory, Brush> _categoryBrushes = new()
+    {
+        [OsdCategory.Game] = Brushes.White,
+        [OsdCategory.Cpu] = Brushes.White,
+        [OsdCategory.Gpu] = Brushes.White,
+        [OsdCategory.Memory] = Brushes.White,
+        [OsdCategory.Motherboard] = Brushes.White,
+    };
     protected Brush _labelBrush = Brushes.White;
     protected Brush _valueBrush = Brushes.White;
     protected Brush _warningBrush = Brushes.Goldenrod;
@@ -396,7 +403,11 @@ public abstract class OsdWindowBase : Window
     {
         var converter = new BrushConverter();
 
-        _categoryBrush = (Brush)converter.ConvertFromString(_OsdSettings.Store.CategoryColor)!;
+        _categoryBrushes[OsdCategory.Game] = (Brush)converter.ConvertFromString(_OsdSettings.Store.CategoryColor)!;
+        _categoryBrushes[OsdCategory.Cpu] = (Brush)converter.ConvertFromString(_OsdSettings.Store.CpuCategoryColor)!;
+        _categoryBrushes[OsdCategory.Gpu] = (Brush)converter.ConvertFromString(_OsdSettings.Store.GpuCategoryColor)!;
+        _categoryBrushes[OsdCategory.Memory] = (Brush)converter.ConvertFromString(_OsdSettings.Store.MemoryCategoryColor)!;
+        _categoryBrushes[OsdCategory.Motherboard] = (Brush)converter.ConvertFromString(_OsdSettings.Store.MotherboardCategoryColor)!;
         _labelBrush = (Brush)converter.ConvertFromString(_OsdSettings.Store.LabelColor)!;
         _valueBrush = (Brush)converter.ConvertFromString(_OsdSettings.Store.ValueColor)!;
         _warningBrush = (Brush)converter.ConvertFromString(_OsdSettings.Store.WarningColor)!;
@@ -450,9 +461,13 @@ public abstract class OsdWindowBase : Window
 
         var visibleGroups = new List<FrameworkElement>();
 
-        foreach (var (groupPanel, (items, _)) in _measurementGroups)
+        // Iterated in true VISUAL order (not the dictionary's fixed insertion order), so which separator ends up
+        // "the last one, so hide it" matches reality once the user has reordered the categories.
+        foreach (var groupPanel in GetGroupPanelsInVisualOrder())
         {
-            bool isGroupActive = items.Any(item =>
+            if (!_measurementGroups.TryGetValue(groupPanel, out var info)) continue;
+
+            bool isGroupActive = info.Items.Any(item =>
             {
                 if (!_activeItems.Contains(item)) return false;
                 if (isHybrid && item == OsdItem.CpuFrequency) return false;
@@ -479,6 +494,11 @@ public abstract class OsdWindowBase : Window
     }
 
     protected virtual void OnItemVisibilityChanged(FrameworkElement element, bool visible) { }
+
+    /// <summary>The registered group panels (keys of <see cref="_measurementGroups"/>), in the order they actually
+    /// appear on screen right now. The base implementation just returns the dictionary's own order (the original,
+    /// fixed layout); a window whose categories can be reordered overrides this to reflect that live order.</summary>
+    protected virtual IEnumerable<FrameworkElement> GetGroupPanelsInVisualOrder() => _measurementGroups.Keys;
 
     #endregion
 

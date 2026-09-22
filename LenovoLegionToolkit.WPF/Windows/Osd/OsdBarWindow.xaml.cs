@@ -2,6 +2,8 @@ using LenovoLegionToolkit.Lib;
 using LenovoLegionToolkit.Lib.Utils;
 using LenovoLegionToolkit.WPF.Extensions;
 using LenovoLegionToolkit.WPF.Resources;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -11,6 +13,8 @@ namespace LenovoLegionToolkit.WPF.Windows.Osd;
 public partial class OsdBarWindow : OsdWindowBase
 {
     private Style? _originalTextBlockStyle;
+    private Dictionary<OsdCategory, FrameworkElement> _categoryGroupOf = new();
+    private Dictionary<OsdCategory, FrameworkElement> _categorySeparatorOf = new();
 
     public OsdBarWindow()
     {
@@ -70,7 +74,24 @@ public partial class OsdBarWindow : OsdWindowBase
             { _memoryGroup, ([OsdItem.MemoryUtilization, OsdItem.MemoryTemperature], _separatorMemory) },
 
             // Storage / Motherboard
-            { _pchGroup, ([OsdItem.Disk1Temperature, OsdItem.Disk2Temperature, OsdItem.PchTemperature, OsdItem.PchFan], null) }
+            { _pchGroup, ([OsdItem.Disk1Temperature, OsdItem.Disk2Temperature, OsdItem.PchTemperature, OsdItem.PchFan], _separatorPch) }
+        };
+
+        _categoryGroupOf = new()
+        {
+            [OsdCategory.Game] = _fpsGroup,
+            [OsdCategory.Cpu] = _cpuGroup,
+            [OsdCategory.Gpu] = _gpuGroup,
+            [OsdCategory.Memory] = _memoryGroup,
+            [OsdCategory.Motherboard] = _pchGroup,
+        };
+        _categorySeparatorOf = new()
+        {
+            [OsdCategory.Game] = _separatorFps,
+            [OsdCategory.Cpu] = _separatorCpu,
+            [OsdCategory.Gpu] = _separatorGpu,
+            [OsdCategory.Memory] = _separatorMemory,
+            [OsdCategory.Motherboard] = _separatorPch,
         };
 
         if (Resources["TextBlockStyle"] is Style style)
@@ -120,14 +141,35 @@ public partial class OsdBarWindow : OsdWindowBase
             Resources["TextBlockStyle"] = newStyle;
         }
 
-        _fpsLabel.Foreground = _categoryBrush;
-        _cpuLabel.Foreground = _categoryBrush;
-        _gpuLabel.Foreground = _categoryBrush;
-        _memLabel.Foreground = _categoryBrush;
-        _pchName.Foreground = _categoryBrush;
+        _fpsLabel.Foreground = _categoryBrushes[OsdCategory.Game];
+        _cpuLabel.Foreground = _categoryBrushes[OsdCategory.Cpu];
+        _gpuLabel.Foreground = _categoryBrushes[OsdCategory.Gpu];
+        _memLabel.Foreground = _categoryBrushes[OsdCategory.Memory];
+        _pchName.Foreground = _categoryBrushes[OsdCategory.Motherboard];
 
         ApplyCornerRadius(_backgroundBorder);
+
+        ApplyCategoryOrder();
     }
+
+    /// <summary>Reassigns Grid.Column for each category's group and its (stable, dedicated) trailing separator, in
+    /// the user's configured order - each pair moves together, two columns per group, so the physical layout of the
+    /// bar reflects that order.</summary>
+    private void ApplyCategoryOrder()
+    {
+        int column = 0;
+        foreach (var category in _OsdSettings.GetCategoryOrder())
+        {
+            Grid.SetColumn(_categoryGroupOf[category], column);
+            Grid.SetColumn(_categorySeparatorOf[category], column + 1);
+            column += 2;
+        }
+
+        UpdateMeasurementControlsVisibility();     // re-decide which separator is now trailing (hidden)
+    }
+
+    protected override IEnumerable<FrameworkElement> GetGroupPanelsInVisualOrder() =>
+        _measurementGroups.Keys.OrderBy(Grid.GetColumn);
 
     protected override void SetDefaultWindowPosition()
     {

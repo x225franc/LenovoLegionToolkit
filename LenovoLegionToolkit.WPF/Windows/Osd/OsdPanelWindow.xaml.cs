@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using LenovoLegionToolkit.Lib;
@@ -10,6 +12,8 @@ public partial class OsdPanelWindow : OsdWindowBase
 {
     private Style? _originalLabelStyle;
     private Style? _originalValueStyle;
+    private Dictionary<OsdCategory, FrameworkElement> _categoryGroupOf = new();
+    private Dictionary<OsdCategory, FrameworkElement> _categorySeparatorOf = new();
 
     public OsdPanelWindow()
     {
@@ -60,16 +64,33 @@ public partial class OsdPanelWindow : OsdWindowBase
             { _fpsGroup, ([OsdItem.Fps, OsdItem.LowFps, OsdItem.FrameTime], _separatorFps) },
 
             // CPU
-            { _cpuGroup, ([OsdItem.CpuFrequency, OsdItem.CpuPCoreFrequency, OsdItem.CpuECoreFrequency, OsdItem.CpuUtilization, OsdItem.CpuTemperature, OsdItem.CpuPower, OsdItem.CpuVoltage, OsdItem.CpuFan], null) },
+            { _cpuGroup, ([OsdItem.CpuFrequency, OsdItem.CpuPCoreFrequency, OsdItem.CpuECoreFrequency, OsdItem.CpuUtilization, OsdItem.CpuTemperature, OsdItem.CpuPower, OsdItem.CpuVoltage, OsdItem.CpuFan], _separatorCpu) },
 
             // GPU
-            { _gpuGroup, ([OsdItem.GpuFrequency, OsdItem.GpuUtilization, OsdItem.GpuTemperature, OsdItem.GpuVramUtilization, OsdItem.GpuVramTemperature, OsdItem.GpuPower, OsdItem.GpuFan], null) },
+            { _gpuGroup, ([OsdItem.GpuFrequency, OsdItem.GpuUtilization, OsdItem.GpuTemperature, OsdItem.GpuVramUtilization, OsdItem.GpuVramTemperature, OsdItem.GpuPower, OsdItem.GpuFan], _separatorGpu) },
 
             // RAM
-            { _memoryGroup, ([OsdItem.MemoryUtilization, OsdItem.MemoryTemperature], null) },
+            { _memoryGroup, ([OsdItem.MemoryUtilization, OsdItem.MemoryTemperature], _separatorMemory) },
 
             // Storage / Motherboard
-            { _pchGroup, ([OsdItem.Disk1Temperature, OsdItem.Disk2Temperature, OsdItem.PchTemperature, OsdItem.PchFan], null) }
+            { _pchGroup, ([OsdItem.Disk1Temperature, OsdItem.Disk2Temperature, OsdItem.PchTemperature, OsdItem.PchFan], _separatorPch) }
+        };
+
+        _categoryGroupOf = new()
+        {
+            [OsdCategory.Game] = _fpsGroup,
+            [OsdCategory.Cpu] = _cpuGroup,
+            [OsdCategory.Gpu] = _gpuGroup,
+            [OsdCategory.Memory] = _memoryGroup,
+            [OsdCategory.Motherboard] = _pchGroup,
+        };
+        _categorySeparatorOf = new()
+        {
+            [OsdCategory.Game] = _separatorFps,
+            [OsdCategory.Cpu] = _separatorCpu,
+            [OsdCategory.Gpu] = _separatorGpu,
+            [OsdCategory.Memory] = _separatorMemory,
+            [OsdCategory.Motherboard] = _separatorPch,
         };
 
         if (_sensorsPanel.Resources["SensorLabelStyle"] is Style labelStyle)
@@ -131,14 +152,38 @@ public partial class OsdPanelWindow : OsdWindowBase
             _sensorsPanel.Resources["SensorValueStyle"] = newStyle;
         }
 
-        _fpsHeader.Foreground = _categoryBrush;
-        _cpuHeader.Foreground = _categoryBrush;
-        _gpuHeader.Foreground = _categoryBrush;
-        _memHeader.Foreground = _categoryBrush;
-        _pchHeader.Foreground = _categoryBrush;
+        _fpsHeader.Foreground = _categoryBrushes[OsdCategory.Game];
+        _cpuHeader.Foreground = _categoryBrushes[OsdCategory.Cpu];
+        _gpuHeader.Foreground = _categoryBrushes[OsdCategory.Gpu];
+        _memHeader.Foreground = _categoryBrushes[OsdCategory.Memory];
+        _pchHeader.Foreground = _categoryBrushes[OsdCategory.Motherboard];
 
         ApplyCornerRadius(_rootBorder);
+
+        ApplyCategoryOrder();
     }
+
+    /// <summary>Moves each category's group (and its trailing separator) to the end of <see cref="_sensorsPanel"/>,
+    /// one at a time in the user's configured order - since a StackPanel lays out its children in the order they
+    /// appear in <see cref="Panel.Children"/>, this reproduces that order on screen.</summary>
+    private void ApplyCategoryOrder()
+    {
+        foreach (var category in _OsdSettings.GetCategoryOrder())
+        {
+            var group = _categoryGroupOf[category];
+            var separator = _categorySeparatorOf[category];
+
+            _sensorsPanel.Children.Remove(group);
+            _sensorsPanel.Children.Add(group);
+            _sensorsPanel.Children.Remove(separator);
+            _sensorsPanel.Children.Add(separator);
+        }
+
+        UpdateMeasurementControlsVisibility();     // re-decide which separator is now trailing (hidden)
+    }
+
+    protected override IEnumerable<FrameworkElement> GetGroupPanelsInVisualOrder() =>
+        _sensorsPanel.Children.OfType<FrameworkElement>().Where(_measurementGroups.ContainsKey);
 
     protected override void SetDefaultWindowPosition()
     {

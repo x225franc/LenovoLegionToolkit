@@ -2288,7 +2288,7 @@ Click No to disable Hardware Sensor feature.</value>
     <value>Utilization</value>
   </data>
   <data name="Osd_Pch" xml:space="preserve">
-    <value>PCH</value>
+    <value>MB</value>
   </data>
   <data name="Osd_PCH_Fan" xml:space="preserve">
     <value>PCH Fan</value>

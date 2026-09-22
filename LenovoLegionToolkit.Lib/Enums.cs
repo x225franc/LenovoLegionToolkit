@@ -609,6 +609,17 @@ public enum OsdItem
     PchFan,
 }
 
+/// <summary>The category headers of the OSD (both the panel and the bar style) - independently colorable and
+/// reorderable, in <see cref="Settings.OsdSettings.OsdSettingsStore.CategoryOrder"/>.</summary>
+public enum OsdCategory
+{
+    Game,
+    Cpu,
+    Gpu,
+    Memory,
+    Motherboard
+}
+
 public enum OverDriveState
 {
     [Display(ResourceType = typeof(Resource), Name = "OverdriveState_Off")]

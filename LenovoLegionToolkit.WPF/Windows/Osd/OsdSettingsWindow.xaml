@@ -313,15 +313,8 @@
                                     ColorChangedDelayed="OsdBackgroundColorPicker_ColorChangedDelayed" />
                             </custom:CardControl>
 
-                            <custom:CardControl Margin="0,0,0,8" Icon="Grid24">
-                                <custom:CardControl.Header>
-                                    <TextBlock Text="{x:Static resources:Resource.OsdSettings_Appearance_CategoryColor}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                </custom:CardControl.Header>
-                                <controls:ColorPickerControl
-                                    x:Name="_categoryColorPicker"
-                                    HorizontalAlignment="Right"
-                                    ColorChangedDelayed="ColorPicker_ColorChangedDelayed" />
-                            </custom:CardControl>
+                            <TextBlock Margin="0,4,0,8" Text="{x:Static resources:Resource.OsdSettings_Appearance_CategoryColor}" FontWeight="SemiBold" />
+                            <StackPanel x:Name="_categoryColorsPanel" Margin="0,0,0,8" />
 
                             <custom:CardControl Margin="0,0,0,8" Icon="Tag24">
                                 <custom:CardControl.Header>

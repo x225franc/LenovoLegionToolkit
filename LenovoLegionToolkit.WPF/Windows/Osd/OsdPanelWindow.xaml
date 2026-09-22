@@ -267,7 +267,7 @@
                     </Grid>
                 </StackPanel>
 
-                <Separator Margin="0,8" Background="#3A3A3A" />
+                <Separator x:Name="_separatorCpu" Margin="0,8" Background="#3A3A3A" />
 
                 <StackPanel x:Name="_gpuGroup">
                     <TextBlock
@@ -391,7 +391,7 @@
                     </Grid>
                 </StackPanel>
 
-                <Separator Margin="0,8" Background="#3A3A3A" />
+                <Separator x:Name="_separatorGpu" Margin="0,8" Background="#3A3A3A" />
 
                 <StackPanel x:Name="_memoryGroup">
                     <TextBlock
@@ -435,7 +435,7 @@
                     </Grid>
                 </StackPanel>
 
-                <Separator Margin="0,8" Background="#3A3A3A" />
+                <Separator x:Name="_separatorMemory" Margin="0,8" Background="#3A3A3A" />
 
                 <StackPanel x:Name="_pchGroup">
                     <TextBlock
@@ -511,6 +511,8 @@
                             Text="-" />
                     </Grid>
                 </StackPanel>
+
+                <Separator x:Name="_separatorPch" Margin="0,8" Background="#3A3A3A" Visibility="Collapsed" />
 
             </StackPanel>
         </StackPanel>
