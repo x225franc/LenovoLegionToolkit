@@ -239,9 +239,11 @@ public partial class OsdSettingsWindow
             var category = order[i];
             bool isFirst = i == 0, isLast = i == order.Count - 1;
 
+            // A real chevron icon reads far better at this size than the "▲"/"▼" glyphs did, which rendered tiny
+            // and low-contrast inside the button.
             var upButton = new Wpf.Ui.Controls.Button
             {
-                Content = "▲",
+                Icon = Wpf.Ui.Common.SymbolRegular.ChevronUp20,
                 Width = 32,
                 Margin = new Thickness(0, 0, 4, 0),
                 IsEnabled = !isFirst
@@ -250,7 +252,7 @@ public partial class OsdSettingsWindow
 
             var downButton = new Wpf.Ui.Controls.Button
             {
-                Content = "▼",
+                Icon = Wpf.Ui.Common.SymbolRegular.ChevronDown20,
                 Width = 32,
                 Margin = new Thickness(0, 0, 12, 0),
                 IsEnabled = !isLast
