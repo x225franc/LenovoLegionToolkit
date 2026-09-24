@@ -240,8 +240,18 @@ public sealed class PowerStateListener : IListener<PowerStateListener.ChangedEve
             var shouldApply = currentAdapterStatus == PowerAdapterStatus.Connected || overclockingController.AllowOnBattery;
             if (shouldApply)
             {
-                Log.Instance.Trace($"Applying overclocking profile...");
-                await overclockingController.ApplyInternalProfileAsync().ConfigureAwait(false);
+                // Isolated in its own try/catch: a failure here (e.g. the AMD_ACPI WMI interface not being ready
+                // yet right after resume) must not skip the GPU overclock, power mode and fan control re-apply
+                // steps below.
+                try
+                {
+                    Log.Instance.Trace($"Applying overclocking profile...");
+                    await overclockingController.ApplyInternalProfileAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Log.Instance.Trace($"Failed to apply overclocking profile after resume.", ex);
+                }
             }
         }
 

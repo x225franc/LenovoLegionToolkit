@@ -42,6 +42,14 @@ public sealed class AmdOverclockingController : IDisposable
 
     public bool DoNotApply { get; set; }
 
+    /// <summary>Result of the most recent <see cref="ApplyProfileAsync"/> call, regardless of who triggered it
+    /// (the Apply button, startup, or a resume-from-sleep/hibernation re-apply) - lets the UI show a status
+    /// without having to be the caller itself.</summary>
+    public bool? LastApplySucceeded { get; private set; }
+    public string? LastApplyError { get; private set; }
+    public DateTime? LastApplyUtc { get; private set; }
+    public event EventHandler? ApplyStatusChanged;
+
     public bool Enabled
     {
         get => _settings.Store.Enabled;
@@ -102,8 +110,11 @@ public sealed class AmdOverclockingController : IDisposable
         }
         catch (Exception ex)
         {
+            // Deliberately left false (not true) - the AMD_ACPI WMI class can be transiently unavailable right
+            // after boot or immediately after resuming from sleep/hibernation, so the next InitializeAsync() call
+            // (e.g. from ApplyProfileAsync before applying) should retry instead of being permanently skipped.
             Log.Instance.Trace($"AmdOverclockingController initialization failed: {ex.Message}");
-            _isInitialized = true;
+            _isInitialized = false;
             _cpu = null;
         }
         finally
@@ -267,16 +278,47 @@ public sealed class AmdOverclockingController : IDisposable
             return;
         }
 
-        if (!_settings.Store.AllowOnBattery)
+        try
         {
-            var powerStatus = await Power.IsPowerAdapterConnectedAsync().ConfigureAwait(false);
-            if (powerStatus is PowerAdapterStatus.Disconnected or PowerAdapterStatus.ConnectedLowWattage)
-                throw new InvalidOperationException(Resource.AmdOverclocking_Ac_Message);
+            if (!_settings.Store.AllowOnBattery)
+            {
+                var powerStatus = await Power.IsPowerAdapterConnectedAsync().ConfigureAwait(false);
+                if (powerStatus is PowerAdapterStatus.Disconnected or PowerAdapterStatus.ConnectedLowWattage)
+                    throw new InvalidOperationException(Resource.AmdOverclocking_Ac_Message);
+            }
+
+            // A no-op if already initialized; retries a previously failed initialization otherwise, instead of
+            // leaving EnsureInitialized to throw the same "not initialized" error forever.
+            await InitializeAsync().ConfigureAwait(false);
+            EnsureInitialized();
+
+            await ApplyProfileInternalAsync(profile).ConfigureAwait(false);
+
+            await ForceApplyPowerMappingAsync().ConfigureAwait(false);
+            Log.Instance.Trace($"Overclocking profile applied successfully.");
+
+            SetLastApplyResult(true, null);
         }
+        catch (Exception ex)
+        {
+            SetLastApplyResult(false, ex.Message);
+            throw;
+        }
+    }
 
-        EnsureInitialized();
+    private void SetLastApplyResult(bool success, string? error)
+    {
+        LastApplySucceeded = success;
+        LastApplyError = error;
+        LastApplyUtc = DateTime.UtcNow;
+        ApplyStatusChanged?.Invoke(this, EventArgs.Empty);
+    }
 
-        await Task.Run(() =>
+    private Task ApplyProfileInternalAsync(OverclockingProfile profile)
+    {
+        var _cpu = this._cpu ?? throw new InvalidOperationException(Resource.AmdOverclocking_Not_Initialized_Message);
+
+        return Task.Run(() =>
         {
             bool supportsCO = _cpu.smu.Rsmu.SMU_MSG_SetDldoPsmMargin != 0;
 
@@ -321,10 +363,7 @@ public sealed class AmdOverclockingController : IDisposable
             ApplyAndLog("TDCVDD", profile.TDCVdd, v => _cpu.SetTDCVDDLimit((uint)v));
             ApplyAndLog("EDCSOC", profile.EDCSoc, v => _cpu.SetEDCSOCLimit((uint)v));
             ApplyAndLog("EDCVDD", profile.EDCVdd, v => _cpu.SetEDCVDDLimit((uint)v));
-        }).ConfigureAwait(false);
-
-        await ForceApplyPowerMappingAsync().ConfigureAwait(false);
-        Log.Instance.Trace($"Overclocking profile applied successfully.");
+        });
     }
 
     public async Task ApplyInternalProfileAsync()
@@ -462,6 +501,7 @@ public sealed class AmdOverclockingController : IDisposable
 
     public async Task ResetAllActiveCoresCoAsync()
     {
+        await InitializeAsync().ConfigureAwait(false);
         EnsureInitialized();
 
         if (_cpu.smu.Rsmu.SMU_MSG_SetDldoPsmMargin == 0)

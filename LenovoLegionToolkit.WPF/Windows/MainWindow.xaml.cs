@@ -21,6 +21,7 @@ using LenovoLegionToolkit.Lib.Extensions;
 using LenovoLegionToolkit.Lib.Listeners;
 using LenovoLegionToolkit.Lib.Messaging;
 using LenovoLegionToolkit.Lib.Messaging.Messages;
+using LenovoLegionToolkit.Lib.Overclocking.Amd;
 using LenovoLegionToolkit.Lib.Settings;
 using LenovoLegionToolkit.Lib.SoftwareDisabler;
 using LenovoLegionToolkit.Lib.Station.Services;
@@ -30,6 +31,7 @@ using LenovoLegionToolkit.WPF.Extensions;
 using LenovoLegionToolkit.WPF.Pages;
 using LenovoLegionToolkit.WPF.Resources;
 using LenovoLegionToolkit.WPF.Utils;
+using LenovoLegionToolkit.WPF.Windows.Overclocking.Amd;
 using LenovoLegionToolkit.WPF.Windows.Utils;
 using CustomNavigationItem = LenovoLegionToolkit.WPF.Controls.Custom.NavigationItem;
 using Wpf.Ui.Controls.Interfaces;
@@ -48,6 +50,9 @@ public partial class MainWindow
     private readonly FnKeysDisabler _fnKeysDisabler = IoCContainer.Resolve<FnKeysDisabler>();
     private readonly INavigationService _extensionNavigationService = IoCContainer.Resolve<INavigationService>();
     private readonly UpdateChecker _updateChecker = IoCContainer.Resolve<UpdateChecker>();
+    private readonly AmdOverclockingController _amdOverclockingController = IoCContainer.Resolve<AmdOverclockingController>();
+
+    private AmdOverclocking? _amdOverclockingWindow;
 
     private const double CompactMinWidth = 550;
     private const double CompactMinHeight = 480;
@@ -131,6 +136,7 @@ public partial class MainWindow
         _contentGrid.Visibility = Visibility.Visible;
 
         LoadDeviceInfo();
+        LoadAmdOverclockingIndicator();
         UpdateIndicators();
         CheckForUpdates();
 
@@ -166,6 +172,9 @@ public partial class MainWindow
 
             _openLogIndicator.LayoutTransform = new ScaleTransform(0.8, 0.8);
             _openLogIndicator.Margin = new Thickness(0, 0, 4, 0);
+
+            _amdOverclockingIndicator.LayoutTransform = new ScaleTransform(0.8, 0.8);
+            _amdOverclockingIndicator.Margin = new Thickness(0, 0, 4, 0);
 
             _deviceInfoIndicator.LayoutTransform = new ScaleTransform(0.8, 0.8);
             _deviceInfoIndicator.Margin = new Thickness(0, 0, 4, 0);
@@ -224,6 +233,8 @@ public partial class MainWindow
 
     private void MainWindow_Closed(object? sender, EventArgs args)
     {
+        _amdOverclockingController.ApplyStatusChanged -= AmdOverclockingController_ApplyStatusChanged;
+
         _trayHelper?.Dispose();
         _trayHelper = null;
     }
@@ -329,6 +340,16 @@ public partial class MainWindow
         ShowDeviceInfoWindow();
     }
 
+    private void AmdOverclockingIndicator_Click(object sender, MouseButtonEventArgs e) => ShowAmdOverclockingWindow();
+
+    private void AmdOverclockingIndicator_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not Key.Enter and not Key.Space)
+            return;
+
+        ShowAmdOverclockingWindow();
+    }
+
     private void UpdateIndicator_Click(object sender, RoutedEventArgs e) => ShowUpdateWindow();
 
     private void UpdateIndicator_KeyDown(object sender, KeyEventArgs e)
@@ -370,6 +391,58 @@ public partial class MainWindow
 
         _deviceInfoIndicator.Content = modelName;
         _deviceInfoIndicator.Visibility = Visibility.Visible;
+    }
+
+    private async void LoadAmdOverclockingIndicator()
+    {
+        // FakeMachineInformation (used to preview device info display in FakeMachineInformationMode) carries no
+        // hardware capability data, so whether this is an AMD device always comes from the real machine info.
+        var mi = await Compatibility.GetMachineInformationAsync();
+
+        if (!mi.Properties.IsAmdDevice && !AppFlags.Instance.Debug)
+            return;
+
+        _amdOverclockingController.ApplyStatusChanged += AmdOverclockingController_ApplyStatusChanged;
+
+        UpdateAmdOverclockingIndicator();
+        _amdOverclockingIndicator.Visibility = Visibility.Visible;
+    }
+
+    private void AmdOverclockingController_ApplyStatusChanged(object? sender, EventArgs e) =>
+        Dispatcher.Invoke(UpdateAmdOverclockingIndicator);
+
+    private void UpdateAmdOverclockingIndicator()
+    {
+        var success = _amdOverclockingController.LastApplySucceeded;
+
+        _amdOverclockingIndicator.Appearance = success switch
+        {
+            true => ControlAppearance.Success,
+            false => ControlAppearance.Danger,
+            null => ControlAppearance.Secondary,
+        };
+
+        _amdOverclockingIndicator.ToolTip = success switch
+        {
+            true => $"AMD Precision Boost Overclocking - profile applied successfully{(_amdOverclockingController.LastApplyUtc is { } t ? $" ({t.ToLocalTime():t})" : string.Empty)}",
+            false => $"AMD Precision Boost Overclocking - failed to apply the profile: {_amdOverclockingController.LastApplyError}",
+            null => "AMD Precision Boost Overclocking",
+        };
+    }
+
+    private void ShowAmdOverclockingWindow()
+    {
+        if (_amdOverclockingWindow is not { IsLoaded: true })
+        {
+            _amdOverclockingWindow = new AmdOverclocking { Owner = this };
+            _amdOverclockingWindow.Show();
+        }
+        else
+        {
+            _amdOverclockingWindow.Activate();
+            if (_amdOverclockingWindow.WindowState == WindowState.Minimized)
+                _amdOverclockingWindow.BringToForeground();
+        }
     }
 
     private void UpdateIndicators()
